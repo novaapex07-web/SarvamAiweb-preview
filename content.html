@@ -215,13 +215,13 @@ document.addEventListener("admin:ready", function(ev){
       slug: A.slugify($("slug").value || title),
       category: $("category").value || "Technology",
       status: status,
-      excerpt: $("excerpt").value,
-      cover_image_url: $("cover").value.trim() || null,
-      content: $("content").value,
-      created_by: who.user.id,
+      excerpt: $("excerpt").value || "",
+      cover_image_url: $("cover").value.trim() || "",
+      content: $("content").value || "",
       updated_at: new Date().toISOString(),
       published_at: publishedAt
     };
+    if (!id) row.created_by = who.user.id;
     A.setNotice("notice", "Saving…");
     var r = id ? await sb.from("articles").update(row).eq("id", id) : await sb.from("articles").insert(row);
     if (r.error){ A.setNotice("notice", A.friendly(r.error), "error"); return; }
