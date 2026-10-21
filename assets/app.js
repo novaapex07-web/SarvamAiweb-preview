@@ -244,16 +244,37 @@
       await sb.auth.signOut();
       location.replace("index.html");
     };
-    $("bell").onclick = function () { location.href = "inbox.html"; };
-
     document.dispatchEvent(new CustomEvent("shell:built"));
   }
 
-  /* --------------------------- unread watcher ----------------------- */
+  /* --------------------------- notifications ------------------------ *
+   * The bell reads the real admin_notifications table. A notification is
+   * only ever shown when a row actually exists — nothing is invented here.
+   * ------------------------------------------------------------------ */
+  function notifIcon(kind) {
+    return kind === "article_published" ? "✎" : (kind === "contact_message" ? "✉" : "•");
+  }
+  function notifHref(n) {
+    if (n.kind === "contact_message") return "inbox.html";
+    if (n.kind === "article_published") return "content.html";
+    return "dashboard.html";
+  }
   function startWatcher() {
     var last = null;
+
+    var panel = document.createElement("div");
+    panel.className = "notifpanel";
+    panel.id = "notifpanel";
+    panel.setAttribute("aria-hidden", "true");
+    panel.innerHTML =
+      '<div class="notif-head"><b>Notifications</b>' +
+        '<button class="linklike" id="notifread" type="button">Mark all read</button></div>' +
+      '<div class="notif-list" id="notiflist"><div class="empty">Loading…</div></div>';
+    document.body.appendChild(panel);
+    var open = false;
+
     async function refresh(announce) {
-      var res = await sb.from("contact_messages").select("*", { count: "exact", head: true }).eq("status", "new");
+      var res = await sb.from("admin_notifications").select("*", { count: "exact", head: true }).eq("is_read", false);
       if (res.error) return; // never crash the UI over a count
       var n = res.count || 0;
       var dot = $("belldot");
@@ -261,17 +282,43 @@
         dot.textContent = n > 99 ? "99+" : String(n);
         dot.classList.toggle("hidden", n === 0);
       }
-      if (announce && last !== null && n > last) {
-        toast("A new contact message arrived.", "ok", "New message");
-      }
+      if (announce && last !== null && n > last) toast("You have a new notification.", "ok", "Notification");
       last = n;
-      document.dispatchEvent(new CustomEvent("inbox:count", { detail: { unread: n } }));
+      document.dispatchEvent(new CustomEvent("notify:count", { detail: { unread: n } }));
+      if (open) loadList();
     }
-    // Realtime is used only if the table is published to Realtime; it never
-    // invents a notification — a row must actually exist.
+    async function loadList() {
+      var res = await sb.from("admin_notifications").select("*").order("created_at", { ascending: false }).limit(20);
+      var list = $("notiflist");
+      if (res.error) { list.innerHTML = '<div class="empty">' + esc(friendly(res.error)) + "</div>"; return; }
+      var rows = res.data || [];
+      list.innerHTML = rows.length ? rows.map(function (n) {
+        return '<a class="notif' + (n.is_read ? "" : " unread") + '" href="' + notifHref(n) + '">' +
+          '<span class="ic">' + notifIcon(n.kind) + "</span>" +
+          '<span class="body"><b>' + esc(n.title || "Notification") + "</b>" +
+          (n.body ? '<span class="muted small">' + esc(n.body) + "</span>" : "") + "</span>" +
+          '<span class="when">' + relTime(n.created_at) + "</span></a>";
+      }).join("") : '<div class="empty">No notifications yet.</div>';
+    }
+    function setOpen(v) {
+      open = v;
+      panel.classList.toggle("open", v);
+      panel.setAttribute("aria-hidden", v ? "false" : "true");
+      if (v) loadList();
+    }
+    $("bell").onclick = function (e) { e.stopPropagation(); setOpen(!open); };
+    $("notifread").onclick = async function () {
+      var r = await sb.from("admin_notifications").update({ is_read: true }).eq("is_read", false);
+      if (r.error) { toast(friendly(r.error), "error"); return; }
+      await refresh(false); loadList();
+    };
+    document.addEventListener("click", function (e) {
+      if (open && !panel.contains(e.target) && e.target.id !== "bell") setOpen(false);
+    });
+    // Realtime only fires if the table is published to Realtime; the poll is a fallback.
     try {
-      sb.channel("sc-admin-inbox")
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "contact_messages" }, function () { refresh(true); })
+      sb.channel("sc-admin-notifications")
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "admin_notifications" }, function () { refresh(true); })
         .subscribe();
     } catch (e) { /* realtime optional */ }
     refresh(false);
