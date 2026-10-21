@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<script>try{var q=new URLSearchParams(location.search);var t=q.get("theme");if(t)localStorage.setItem("sc_theme",t);var a=q.get("accent");if(a)localStorage.setItem("sc_accent",a);}catch(e){}</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard — Sable &amp; Circuit Admin</title>
+<script>
+(function(){try{
+  var t=localStorage.getItem("sc_theme")||"system";
+  var th=t==="system"?(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):t;
+  var r=document.documentElement;r.setAttribute("data-theme",th);
+  r.setAttribute("data-density",localStorage.getItem("sc_density")||"comfortable");
+  var a={teal:["#00aebb","#00838f"],indigo:["#7c8cff","#4f46e5"],emerald:["#34d399","#059669"],amber:["#f0a132","#b45309"],rose:["#fb7185","#be123c"]}[localStorage.getItem("sc_accent")||"teal"];
+  r.style.setProperty("--accent",th==="dark"?a[0]:a[1]);
+  r.style.setProperty("--accent-ink",th==="dark"?"#04120f":"#ffffff");
+}catch(e){}})();
+</script>
+<link rel="stylesheet" href="assets/app.css">
+<script src="assets/mock-supabase.js"></script>
+</head>
+<body data-page="dashboard" data-shell="app">
+<main class="wrap">
+  <div class="spread">
+    <div>
+      <h1>Overview</h1>
+      <div class="muted" id="greeting">Loading…</div>
+    </div>
+    <div class="row">
+      <a class="btn" href="inbox.html">Open inbox</a>
+      <a class="btn primary" href="content.html?new=1">+ New article</a>
+    </div>
+  </div>
+
+  <div id="notice" class="notice hidden"></div>
+
+  <section class="stats" id="stats" style="margin-top:18px">
+    <div class="stat"><div class="k">Total articles</div><div class="n" id="sTotal">–</div><div class="sub">All rows in articles</div></div>
+    <div class="stat"><div class="k">Published</div><div class="n" id="sPub">–</div><div class="sub">status = published</div></div>
+    <div class="stat"><div class="k">Drafts</div><div class="n" id="sDraft">–</div><div class="sub">status = draft</div></div>
+    <div class="stat"><div class="k">Contact messages</div><div class="n" id="sMsg">–</div><div class="sub">All messages</div></div>
+    <div class="stat accent"><div class="k">Unread</div><div class="n warn" id="sUnread">–</div><div class="sub">status = new</div></div>
+  </section>
+
+  <div class="grid2" style="margin-top:18px">
+    <section class="panel">
+      <div class="spread">
+        <h2 style="margin:0">Recent activity</h2>
+        <button class="btn sm" id="reload">Refresh</button>
+      </div>
+      <p class="muted small">Latest article edits and incoming messages, newest first. Everything here is read live from the database.</p>
+      <div class="feed" id="feed"><div class="empty">Loading…</div></div>
+    </section>
+
+    <section class="panel">
+      <h2 style="margin:0 0 4px">Needs attention</h2>
+      <p class="muted small">Derived from live records — nothing is hardcoded.</p>
+      <div id="attention" class="stack"><div class="empty">Loading…</div></div>
+      <div class="divider"></div>
+      <div class="kv">
+        <div class="k">Signed in as</div><div id="whoami">—</div>
+        <div class="k">Role</div><div id="role">—</div>
+        <div class="k">Last loaded</div><div id="loaded">—</div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script src="assets/app.js"></script>
+<script>
+document.addEventListener("admin:ready", async function(ev){
+  var A = window.Admin, sb = A.sb, $ = A.$, who = ev.detail;
+  $("whoami").textContent = who.user.email || "—";
+  $("role").textContent = who.role || "admin";
+  $("greeting").textContent = "Signed in as " + (who.user.email || "admin") + " · " + (who.role || "admin");
+
+  function count(table, apply){
+    var q = sb.from(table).select("*", { count: "exact", head: true });
+    if (apply) q = apply(q);
+    return q.then(function(r){ if (r.error) throw r.error; return r.count || 0; });
+  }
+
+  async function load(){
+    A.setNotice("notice", "");
+    try{
+      var vals = await Promise.all([
+        count("articles"),
+        count("articles", function(q){ return q.eq("status", "published"); }),
+        count("articles", function(q){ return q.eq("status", "draft"); }),
+        count("contact_messages"),
+        count("contact_messages", function(q){ return q.eq("status", "new"); })
+      ]);
+      $("sTotal").textContent  = vals[0];
+      $("sPub").textContent    = vals[1];
+      $("sDraft").textContent  = vals[2];
+      $("sMsg").textContent    = vals[3];
+      $("sUnread").textContent = vals[4];
+      $("loaded").textContent  = A.fmtDate(new Date().toISOString());
+      attention(vals);
+    } catch(e){
+      A.setNotice("notice", "Could not load dashboard counts: " + A.friendly(e), "error");
+    }
+  }
+
+  function attention(v){
+    var box = $("attention"), rows = [];
+    if (v[4] > 0) rows.push('<a class="item" href="inbox.html" style="display:block"><b>' + v[4] + ' unread message' + (v[4] === 1 ? "" : "s") + '</b><div class="meta">Open the inbox to read and archive them.</div></a>');
+    if (v[2] > 0) rows.push('<a class="item" href="content.html" style="display:block"><b>' + v[2] + ' draft' + (v[2] === 1 ? "" : "s") + ' awaiting review</b><div class="meta">Finish and publish from Content.</div></a>');
+    if (v[1] === 0 && v[0] > 0) rows.push('<div class="item"><b>Nothing is published yet</b><div class="meta">Your public site has no live articles.</div></div>');
+    if (v[0] === 0) rows.push('<a class="item" href="content.html?new=1" style="display:block"><b>No articles yet</b><div class="meta">Create your first article to get started.</div></a>');
+    box.innerHTML = rows.length ? rows.join("") : '<div class="empty">All clear — nothing needs attention.</div>';
+  }
+
+  async function feed(){
+    var box = $("feed");
+    try{
+      var a = await sb.from("articles").select("id,title,slug,status,updated_at").order("updated_at", { ascending: false }).limit(6);
+      var m = await sb.from("contact_messages").select("id,name,subject,status,created_at").order("created_at", { ascending: false }).limit(6);
+      if (a.error) throw a.error; if (m.error) throw m.error;
+      var items = [];
+      (a.data || []).forEach(function(x){ items.push({ at: x.updated_at, ic: "✎", body: '<b>' + A.esc(x.title) + '</b> <span class="badge ' + A.esc(x.status) + '">' + A.esc(x.status) + '</span><div class="muted small">Article updated</div>', href: "content.html?edit=" + encodeURIComponent(x.id) }); });
+      (m.data || []).forEach(function(x){ items.push({ at: x.created_at, ic: "✉", body: '<b>' + A.esc(x.subject || "No subject") + '</b><div class="muted small">Message from ' + A.esc(x.name || x.email || "visitor") + '</div>', href: "inbox.html" }); });
+      items.sort(function(p, q){ return new Date(q.at) - new Date(p.at); });
+      box.innerHTML = items.length ? items.slice(0, 9).map(function(it){
+        return '<a class="act" href="' + it.href + '" style="color:inherit;text-decoration:none">' +
+          '<span class="ic">' + it.ic + '</span><span class="body">' + it.body + '</span>' +
+          '<span class="when">' + A.relTime(it.at) + '</span></a>';
+      }).join("") : '<div class="empty">No activity yet.</div>';
+    } catch(e){
+      box.innerHTML = '<div class="empty">Could not load activity: ' + A.esc(A.friendly(e)) + '</div>';
+    }
+  }
+
+  $("reload").onclick = function(){ load(); feed(); if (window.Admin.refreshUnread) window.Admin.refreshUnread(); };
+  document.addEventListener("inbox:count", function(e){
+    $("sUnread").textContent = e.detail.unread;
+  });
+
+  load();
+  feed();
+});
+</script>
+</body>
+</html>
