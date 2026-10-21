@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<script>try{var q=new URLSearchParams(location.search);var t=q.get("theme");if(t)localStorage.setItem("sc_theme",t);var a=q.get("accent");if(a)localStorage.setItem("sc_accent",a);}catch(e){}</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Content — Sable &amp; Circuit Admin</title>
+<script>
+(function(){try{
+  var t=localStorage.getItem("sc_theme")||"system";
+  var th=t==="system"?(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):t;
+  var r=document.documentElement;r.setAttribute("data-theme",th);
+  r.setAttribute("data-density",localStorage.getItem("sc_density")||"comfortable");
+  var a={teal:["#00aebb","#00838f"],indigo:["#7c8cff","#4f46e5"],emerald:["#34d399","#059669"],amber:["#f0a132","#b45309"],rose:["#fb7185","#be123c"]}[localStorage.getItem("sc_accent")||"teal"];
+  r.style.setProperty("--accent",th==="dark"?a[0]:a[1]);
+  r.style.setProperty("--accent-ink",th==="dark"?"#04120f":"#ffffff");
+}catch(e){}})();
+</script>
+<link rel="stylesheet" href="assets/app.css">
+<script src="assets/mock-supabase.js"></script>
+</head>
+<body data-page="content" data-shell="app">
+<main class="wrap">
+  <h1>Content</h1>
+  <div class="muted">Articles and categories for the public journal.</div>
+  <div id="notice" class="notice hidden"></div>
+
+  <div class="tabs" style="margin-top:18px">
+    <button class="tab active" id="tabArticles">Articles</button>
+    <button class="tab" id="tabCategories">Categories</button>
+  </div>
+
+  <!-- ------------------------------- ARTICLES ------------------------------ -->
+  <section id="paneArticles">
+    <div class="toolbar">
+      <div class="search"><input id="q" type="search" placeholder="Search title, slug or excerpt…"></div>
+      <select id="fCategory" style="max-width:200px"><option value="">All categories</option></select>
+      <select id="fStatus" style="max-width:170px">
+        <option value="">All statuses</option>
+        <option value="published">Published</option>
+        <option value="draft">Draft</option>
+      </select>
+      <span class="muted small" id="count"></span>
+      <button class="btn primary" id="newArticle">+ New article</button>
+    </div>
+
+    <div class="grid2">
+      <section class="panel">
+        <h2 style="margin-top:0">Journal articles</h2>
+        <div id="list"><div class="empty">Loading…</div></div>
+      </section>
+
+      <section class="panel">
+        <div class="spread">
+          <h2 style="margin:0" id="formtitle">Create article</h2>
+          <span class="badge" id="formstate">New</span>
+        </div>
+        <form id="articleform">
+          <input id="aid" type="hidden">
+          <div class="field"><label for="title">Title</label><input id="title" required maxlength="200"></div>
+          <div class="field"><label for="slug">Slug</label><input id="slug" required maxlength="200"></div>
+          <div class="grid2" style="gap:12px">
+            <div class="field"><label for="category">Category</label><select id="category" required></select></div>
+            <div class="field"><label for="status">Status</label><select id="status"><option value="draft">Draft</option><option value="published">Published</option></select></div>
+          </div>
+          <div class="field"><label for="excerpt">Excerpt</label><textarea id="excerpt" rows="2" maxlength="400"></textarea></div>
+          <div class="field">
+            <label for="cover">Cover image</label>
+            <input id="cover" type="url" placeholder="https://… or upload below">
+            <input id="coverfile" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif">
+            <small class="muted">Upload a cover (max 10 MB). Without one, the website uses its fallback cover.</small>
+            <img id="coverpreview" class="thumb hidden" alt="Cover preview">
+          </div>
+          <div class="field"><label for="content">Content</label><textarea id="content" rows="9"></textarea></div>
+          <div class="row">
+            <button class="btn primary" type="submit">Save article</button>
+            <button class="btn" type="button" id="saveDraft">Save as draft</button>
+            <button class="btn" type="button" id="publishBtn">Publish</button>
+            <button class="btn" type="button" id="previewBtn">Preview</button>
+            <button class="btn ghost" type="button" id="clearBtn">Clear</button>
+          </div>
+          <p class="muted small" id="formmeta"></p>
+        </form>
+      </section>
+    </div>
+  </section>
+
+  <!-- ------------------------------ CATEGORIES ----------------------------- -->
+  <section id="paneCategories" class="hidden">
+    <div class="grid2">
+      <section class="panel">
+        <h2 style="margin-top:0">Dynamic categories</h2>
+        <p class="muted small">Categories appear on the public site, its filters and search metadata.</p>
+        <div id="categorylist"><div class="empty">Loading…</div></div>
+      </section>
+      <section class="panel">
+        <h2 style="margin-top:0" id="categoryformtitle">Create category</h2>
+        <form id="categoryform">
+          <input id="cid" type="hidden">
+          <div class="field"><label for="cname">Name</label><input id="cname" required maxlength="80" placeholder="Cybersecurity"></div>
+          <div class="field"><label for="cslug">Slug</label><input id="cslug" required maxlength="100" placeholder="cybersecurity"></div>
+          <div class="field"><label for="cdescription">Description</label><textarea id="cdescription" maxlength="240" placeholder="Security, privacy and threat research."></textarea></div>
+          <div class="grid2" style="gap:12px">
+            <div class="field"><label for="cglyph">Glyph</label><input id="cglyph" maxlength="8" value="✦"></div>
+            <div class="field"><label for="csort">Sort order</label><input id="csort" type="number" value="100"></div>
+          </div>
+          <div class="row">
+            <button class="btn primary" type="submit">Save category</button>
+            <button class="btn ghost" type="button" id="categoryclear">Clear</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </section>
+</main>
+
+<div id="modalRoot"></div>
+
+<script src="assets/app.js"></script>
+<script>
+document.addEventListener("admin:ready", function(ev){
+  var A = window.Admin, sb = A.sb, $ = A.$, who = ev.detail;
+  var articles = [], categories = [];
+
+  /* ------------------------------ tabs ------------------------------ */
+  function showTab(which){
+    $("paneArticles").classList.toggle("hidden", which !== "articles");
+    $("paneCategories").classList.toggle("hidden", which !== "categories");
+    $("tabArticles").classList.toggle("active", which === "articles");
+    $("tabCategories").classList.toggle("active", which === "categories");
+    if (which === "categories") loadCategories();
+  }
+  $("tabArticles").onclick = function(){ showTab("articles"); };
+  $("tabCategories").onclick = function(){ showTab("categories"); };
+
+  /* --------------------------- cover preview ------------------------ */
+  function showCover(url){
+    var im = $("coverpreview");
+    if (url){ im.src = url; im.classList.remove("hidden"); im.onerror = function(){ im.classList.add("hidden"); }; }
+    else { im.removeAttribute("src"); im.classList.add("hidden"); }
+  }
+  $("cover").oninput = function(){ showCover($("cover").value.trim()); };
+  $("coverfile").onchange = async function(){
+    var file = $("coverfile").files && $("coverfile").files[0];
+    if (!file) return;
+    if (!/^image\/(jpeg|png|webp|gif|avif)$/.test(file.type)){ A.setNotice("notice", "Choose a JPG, PNG, WebP, GIF or AVIF image.", "error"); $("coverfile").value = ""; return; }
+    if (file.size > 10 * 1024 * 1024){ A.setNotice("notice", "Image is too large. Maximum size is 10 MB.", "error"); $("coverfile").value = ""; return; }
+    try{
+      A.setNotice("notice", "Uploading cover image…");
+      var ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+      var path = "covers/" + Date.now() + "-" + Math.random().toString(36).slice(2, 9) + "." + ext;
+      var up = await sb.storage.from(A.COVER_BUCKET).upload(path, file, { cacheControl: "3600", upsert: false, contentType: file.type });
+      if (up.error) throw up.error;
+      var pub = sb.storage.from(A.COVER_BUCKET).getPublicUrl(path);
+      $("cover").value = pub.data.publicUrl;
+      showCover(pub.data.publicUrl);
+      A.setNotice("notice", "Cover uploaded. Save the article to apply it.", "ok");
+    } catch(e){
+      A.setNotice("notice", "Image upload failed: " + A.friendly(e), "error");
+    }
+  };
+
+  /* --------------------------- article form ------------------------- */
+  function clearArticle(){
+    $("articleform").reset();
+    $("aid").value = "";
+    $("status").value = "draft";
+    if (categories.length) $("category").value = categories[0].name;
+    $("formtitle").textContent = "Create article";
+    $("formstate").textContent = "New";
+    $("formstate").className = "badge";
+    $("formmeta").textContent = "";
+    showCover("");
+  }
+  $("title").oninput = function(){ if (!$("aid").value) $("slug").value = A.slugify($("title").value); };
+  $("newArticle").onclick = function(){ clearArticle(); $("title").focus(); };
+  $("clearBtn").onclick = clearArticle;
+
+  function fillForm(a){
+    $("aid").value = a.id;
+    $("title").value = a.title || "";
+    $("slug").value = a.slug || "";
+    if (a.category) {
+      var has = Array.prototype.some.call($("category").options, function(o){ return o.value === a.category; });
+      if (!has && a.category) { var o = document.createElement("option"); o.value = a.category; o.textContent = a.category; $("category").appendChild(o); }
+      $("category").value = a.category;
+    }
+    $("status").value = a.status || "draft";
+    $("excerpt").value = a.excerpt || "";
+    $("cover").value = a.cover_image_url || "";
+    $("content").value = a.content || "";
+    $("formtitle").textContent = "Edit article";
+    $("formstate").textContent = a.status || "draft";
+    $("formstate").className = "badge " + (a.status || "draft");
+    $("formmeta").textContent = "Created " + A.fmtDate(a.created_at) + " · updated " + A.fmtDate(a.updated_at);
+    showCover(a.cover_image_url || "");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function saveArticle(forcedStatus){
+    var id = $("aid").value;
+    var status = forcedStatus || $("status").value;
+    var title = $("title").value.trim();
+    if (!title){ A.setNotice("notice", "A title is required.", "error"); return; }
+    var existing = id ? articles.filter(function(x){ return x.id === id; })[0] : null;
+    var publishedAt = status === "published" ? ((existing && existing.published_at) || new Date().toISOString()) : null;
+
+    var verb = !id ? (status === "published" ? "Publish this new article?" : "Save this new article as a draft?")
+                   : (status === "published" ? "Save changes and publish this article? It will be live on the public site."
+                                             : "Save changes and keep this article as a draft?");
+    if (!confirm(verb)) return;
+
+    var row = {
+      title: title,
+      slug: A.slugify($("slug").value || title),
+      category: $("category").value || "Technology",
+      status: status,
+      excerpt: $("excerpt").value,
+      cover_image_url: $("cover").value.trim() || null,
+      content: $("content").value,
+      created_by: who.user.id,
+      updated_at: new Date().toISOString(),
+      published_at: publishedAt
+    };
+    A.setNotice("notice", "Saving…");
+    var r = id ? await sb.from("articles").update(row).eq("id", id) : await sb.from("articles").insert(row);
+    if (r.error){ A.setNotice("notice", A.friendly(r.error), "error"); return; }
+    A.setNotice("notice", status === "published" ? "Article published." : "Draft saved.", "ok");
+    A.toast(status === "published" ? "Article published." : "Draft saved.", "ok");
+    clearArticle();
+    await loadArticles();
+  }
+  $("articleform").onsubmit = function(e){ e.preventDefault(); saveArticle(null); };
+  $("saveDraft").onclick = function(){ $("status").value = "draft"; saveArticle("draft"); };
+  $("publishBtn").onclick = function(){ $("status").value = "published"; saveArticle("published"); };
+
+  async function setStatus(a, status){
+    var msg = status === "published" ? "Publish \"" + a.title + "\"? It will be live on the public site."
+                                     : "Move \"" + a.title + "\" back to drafts? It will be hidden from the public site.";
+    if (!confirm(msg)) return;
+    var r = await sb.from("articles").update({
+      status: status,
+      published_at: status === "published" ? (a.published_at || new Date().toISOString()) : null,
+      updated_at: new Date().toISOString()
+    }).eq("id", a.id);
+    if (r.error){ A.setNotice("notice", A.friendly(r.error), "error"); return; }
+    A.toast(status === "published" ? "Article published." : "Moved to drafts.", "ok");
+    await loadArticles();
+  }
+  async function removeArticle(a){
+    if (!confirm("Delete \"" + a.title + "\" permanently? This cannot be undone.")) return;
+    var r = await sb.from("articles").delete().eq("id", a.id);
+    if (r.error){ A.setNotice("notice", A.friendly(r.error), "error"); return; }
+    A.toast("Article deleted.", "ok");
+    if ($("aid").value === a.id) clearArticle();
+    await loadArticles();
+  }
+
+  /* ---------------------------- preview ----------------------------- */
+  function preview(a){
+    var root = $("modalRoot");
+    root.innerHTML =
+      '<div class="modal" id="pv"><div class="sheet">' +
+        '<div class="sheet-head"><b>Preview</b><button class="iconbtn" id="pvclose" aria-label="Close">' + A.ICON.close + '</button></div>' +
+        '<div class="sheet-body">' +
+          '<div class="pill-row"><span class="badge ' + A.esc(a.status || "draft") + '">' + A.esc(a.status || "draft") + '</span><span class="badge">' + A.esc(a.category || "—") + '</span></div>' +
+          '<h2 class="preview-title">' + A.esc(a.title || "Untitled") + '</h2>' +
+          '<div class="muted small">' + A.esc(a.slug || "") + '</div>' +
+          (a.cover_image_url ? '<img src="' + A.esc(a.cover_image_url) + '" alt="" style="width:100%;border-radius:12px;border:1px solid var(--line);margin-top:14px">' : "") +
+          (a.excerpt ? '<p style="font-size:16px"><em>' + A.esc(a.excerpt) + '</em></p>' : "") +
+          '<div class="preview-body">' + A.esc(a.content || "") + '</div>' +
+        '</div>' +
+      '</div></div>';
+    function close(){ root.innerHTML = ""; }
+    $("pvclose").onclick = close;
+    $("pv").onclick = function(e){ if (e.target.id === "pv") close(); };
+    document.addEventListener("keydown", function esc2(e){ if (e.key === "Escape"){ close(); document.removeEventListener("keydown", esc2); } });
+  }
+  $("previewBtn").onclick = function(){
+    preview({
+      title: $("title").value, slug: $("slug").value, category: $("category").value,
+      status: $("status").value, excerpt: $("excerpt").value,
+      cover_image_url: $("cover").value, content: $("content").value
+    });
+  };
+
+  /* --------------------------- article list ------------------------- */
+  function render(){
+    var q = $("q").value.trim().toLowerCase();
+    var fc = $("fCategory").value, fs = $("fStatus").value;
+    var rows = articles.filter(function(a){
+      if (fc && a.category !== fc) return false;
+      if (fs && a.status !== fs) return false;
+      if (q){
+        var hay = ((a.title || "") + " " + (a.slug || "") + " " + (a.category || "") + " " + (a.excerpt || "")).toLowerCase();
+        if (hay.indexOf(q) === -1) return false;
+      }
+      return true;
+    });
+    $("count").textContent = rows.length + " of " + articles.length + " shown";
+    if (!rows.length){ $("list").innerHTML = '<div class="empty">' + (articles.length ? "No articles match your filters." : "No articles yet.") + '</div>'; return; }
+    $("list").innerHTML = rows.map(function(a){
+      return '<div class="item" data-id="' + A.esc(a.id) + '">' +
+        '<div class="spread"><div class="t">' + A.esc(a.title || "Untitled") + '</div><span class="badge ' + A.esc(a.status || "draft") + '">' + A.esc(a.status || "draft") + '</span></div>' +
+        '<div class="meta">' + A.esc(a.slug || "") + ' · ' + A.esc(a.category || "—") + ' · updated ' + A.relTime(a.updated_at) + '</div>' +
+        (a.cover_image_url ? '<img class="thumb" src="' + A.esc(a.cover_image_url) + '" alt="">' : '<div class="meta">No cover image</div>') +
+        '<div class="row">' +
+          '<button class="btn sm" data-act="edit">Edit</button>' +
+          '<button class="btn sm" data-act="preview">Preview</button>' +
+          (a.status === "published"
+            ? '<button class="btn sm" data-act="draft">Unpublish</button>'
+            : '<button class="btn sm primary" data-act="publish">Publish</button>') +
+          '<button class="btn sm danger" data-act="delete">Delete</button>' +
+        '</div></div>';
+    }).join("");
+    $("list").querySelectorAll(".item").forEach(function(el){
+      var a = articles.filter(function(x){ return x.id === el.getAttribute("data-id"); })[0];
+      el.querySelectorAll("[data-act]").forEach(function(b){
+        b.onclick = function(){
+          var act = b.getAttribute("data-act");
+          if (act === "edit") fillForm(a);
+          else if (act === "preview") preview(a);
+          else if (act === "publish") setStatus(a, "published");
+          else if (act === "draft") setStatus(a, "draft");
+          else if (act === "delete") removeArticle(a);
+        };
+      });
+    });
+  }
+  $("q").oninput = render;
+  $("fCategory").onchange = render;
+  $("fStatus").onchange = render;
+
+  async function loadArticles(){
+    var r = await sb.from("articles").select("*").order("updated_at", { ascending: false });
+    if (r.error){ $("list").innerHTML = '<div class="empty">' + A.esc(A.friendly(r.error)) + '</div>'; return; }
+    articles = r.data || [];
+    render();
+  }
+
+  /* -------------------------- categories ---------------------------- */
+  function renderCategoryOptions(){
+    var el = $("category"), cur = el.value;
+    el.innerHTML = categories.map(function(c){ return '<option value="' + A.esc(c.name) + '">' + A.esc(c.name) + '</option>'; }).join("");
+    if (!categories.length) el.innerHTML = '<option value="Technology">Technology</option>';
+    if (cur && Array.prototype.some.call(el.options, function(o){ return o.value === cur; })) el.value = cur;
+    else if (el.options.length) el.value = el.options[0].value;
+
+    var fc = $("fCategory"), fcCur = fc.value;
+    fc.innerHTML = '<option value="">All categories</option>' + categories.map(function(c){ return '<option value="' + A.esc(c.name) + '">' + A.esc(c.name) + '</option>'; }).join("");
+    if (fcCur) fc.value = fcCur;
+  }
+  function renderCategoryList(){
+    if (!categories.length){ $("categorylist").innerHTML = '<div class="empty">No categories yet.</div>'; return; }
+    $("categorylist").innerHTML = categories.map(function(c){
+      return '<div class="item" data-id="' + A.esc(c.id) + '">' +
+        '<div class="t">' + A.esc(c.glyph || "✦") + ' ' + A.esc(c.name) + '</div>' +
+        '<div class="meta">' + A.esc(c.slug) + ' · ' + A.esc(c.description || "No description") + ' · order ' + A.esc(c.sort_order == null ? 100 : c.sort_order) + '</div>' +
+        '<div class="row"><button class="btn sm" data-act="edit">Edit</button><button class="btn sm danger" data-act="delete">Delete</button></div></div>';
+    }).join("");
+    $("categorylist").querySelectorAll(".item").forEach(function(el){
+      var c = categories.filter(function(x){ return x.id === el.getAttribute("data-id"); })[0];
+      el.querySelector('[data-act="edit"]').onclick = function(){
+        $("cid").value = c.id; $("cname").value = c.name; $("cslug").value = c.slug;
+        $("cdescription").value = c.description || ""; $("cglyph").value = c.glyph || "✦";
+        $("csort").value = (c.sort_order == null ? 100 : c.sort_order);
+        $("categoryformtitle").textContent = "Edit category";
+      };
+      el.querySelector('[data-act="delete"]').onclick = function(){ deleteCategory(c); };
+    });
+  }
+  function clearCategory(){
+    $("categoryform").reset(); $("cid").value = ""; $("cglyph").value = "✦"; $("csort").value = "100";
+    $("categoryformtitle").textContent = "Create category";
+  }
+  async function loadCategories(){
+    var r = await sb.from("categories").select("*").order("sort_order").order("name");
+    if (r.error){ A.setNotice("notice", "Could not load categories: " + A.friendly(r.error), "error"); return; }
+    categories = r.data || [];
+    renderCategoryOptions(); renderCategoryList();
+  }
+  async function deleteCategory(c){
+    if (c.name === "Technology"){ A.setNotice("notice", "Technology is the fallback category and cannot be deleted.", "error"); return; }
+    if (!confirm('Delete category "' + c.name + '"? Existing articles will be moved to Technology; the articles themselves are kept.')) return;
+    var mv = await sb.from("articles").update({ category: "Technology" }).eq("category", c.name);
+    if (mv.error){ A.setNotice("notice", A.friendly(mv.error), "error"); return; }
+    var del = await sb.from("categories").delete().eq("id", c.id);
+    if (del.error){ A.setNotice("notice", A.friendly(del.error), "error"); return; }
+    A.toast("Category deleted; articles preserved.", "ok");
+    await loadCategories(); await loadArticles();
+  }
+  $("categoryform").onsubmit = async function(e){
+    e.preventDefault();
+    var id = $("cid").value, name = $("cname").value.trim();
+    var slug = A.slugify($("cslug").value || name);
+    var row = {
+      name: name, slug: slug, description: $("cdescription").value.trim(),
+      glyph: $("cglyph").value.trim() || "✦",
+      sort_order: Number($("csort").value) || 100,
+      updated_at: new Date().toISOString()
+    };
+    var old = id ? categories.filter(function(c){ return c.id === id; })[0] : null;
+    if (old && old.name !== name){
+      var mv = await sb.from("articles").update({ category: name }).eq("category", old.name);
+      if (mv.error){ A.setNotice("notice", A.friendly(mv.error), "error"); return; }
+    }
+    var r = id ? await sb.from("categories").update(row).eq("id", id) : await sb.from("categories").insert(row);
+    if (r.error){ A.setNotice("notice", A.friendly(r.error), "error"); return; }
+    A.setNotice("notice", "Category saved.", "ok");
+    clearCategory();
+    await loadCategories(); await loadArticles();
+  };
+  $("cname").oninput = function(){ if (!$("cid").value) $("cslug").value = A.slugify($("cname").value); };
+  $("categoryclear").onclick = clearCategory;
+
+  /* ------------------------------ boot ------------------------------ */
+  (async function(){
+    await loadCategories();
+    await loadArticles();
+    var params = new URLSearchParams(location.search);
+    if (params.get("new")){ clearArticle(); }
+    if (params.get("edit")){
+      var r = await sb.from("articles").select("*").eq("id", params.get("edit")).maybeSingle();
+      if (r.data) fillForm(r.data);
+      else A.setNotice("notice", "That article could not be found.", "error");
+    }
+  })();
+});
+</script>
+</body>
+</html>
