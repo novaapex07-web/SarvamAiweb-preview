@@ -39,7 +39,8 @@
     <div class="stat"><div class="k">Published</div><div class="n" id="sPub">–</div><div class="sub">status = published</div></div>
     <div class="stat"><div class="k">Drafts</div><div class="n" id="sDraft">–</div><div class="sub">status = draft</div></div>
     <div class="stat"><div class="k">Contact messages</div><div class="n" id="sMsg">–</div><div class="sub">All messages</div></div>
-    <div class="stat accent"><div class="k">Unread</div><div class="n warn" id="sUnread">–</div><div class="sub">status = new</div></div>
+    <div class="stat"><div class="k">Unread messages</div><div class="n" id="sUnread">–</div><div class="sub">contact_messages · status = new</div></div>
+    <div class="stat accent"><div class="k">Unread notifications</div><div class="n warn" id="sNotif">–</div><div class="sub">admin_notifications · unread</div></div>
   </section>
 
   <div class="grid2" style="margin-top:18px">
@@ -88,13 +89,15 @@ document.addEventListener("admin:ready", async function(ev){
         count("articles", function(q){ return q.eq("status", "published"); }),
         count("articles", function(q){ return q.eq("status", "draft"); }),
         count("contact_messages"),
-        count("contact_messages", function(q){ return q.eq("status", "new"); })
+        count("contact_messages", function(q){ return q.eq("status", "new"); }),
+        count("admin_notifications", function(q){ return q.eq("is_read", false); })
       ]);
       $("sTotal").textContent  = vals[0];
       $("sPub").textContent    = vals[1];
       $("sDraft").textContent  = vals[2];
       $("sMsg").textContent    = vals[3];
       $("sUnread").textContent = vals[4];
+      $("sNotif").textContent  = vals[5];
       $("loaded").textContent  = A.fmtDate(new Date().toISOString());
       attention(vals);
     } catch(e){
@@ -132,8 +135,8 @@ document.addEventListener("admin:ready", async function(ev){
   }
 
   $("reload").onclick = function(){ load(); feed(); if (window.Admin.refreshUnread) window.Admin.refreshUnread(); };
-  document.addEventListener("inbox:count", function(e){
-    $("sUnread").textContent = e.detail.unread;
+  document.addEventListener("notify:count", function(e){
+    $("sNotif").textContent = e.detail.unread;
   });
 
   load();
