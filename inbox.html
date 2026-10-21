@@ -147,7 +147,6 @@ document.addEventListener("admin:ready", function(){
   $("q").oninput = render;
   $("fStatus").onchange = render;
   $("reload").onclick = load;
-  document.addEventListener("inbox:count", function(e){ $("unreadBadge").textContent = e.detail.unread + " unread"; });
 
   load();
 });
