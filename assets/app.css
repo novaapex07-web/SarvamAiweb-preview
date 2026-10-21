@@ -259,6 +259,24 @@ input[type="file"]{padding:8px}
 .pill-row{display:flex;gap:8px;flex-wrap:wrap}
 .hintbox{border:1px dashed var(--line);border-radius:10px;padding:12px;color:var(--muted);font-size:13px}
 
+/* ---------- notification panel ---------- */
+.notifpanel{
+  position:fixed;top:62px;right:16px;width:344px;max-width:92vw;max-height:70vh;overflow:auto;
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
+  z-index:96;transform:translateY(-8px);opacity:0;pointer-events:none;transition:var(--t);
+}
+.notifpanel.open{transform:none;opacity:1;pointer-events:auto}
+.notif-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel)}
+.notif-list{display:grid}
+.notif{display:flex;gap:10px;align-items:flex-start;padding:11px 14px;border-bottom:1px solid var(--line-soft);color:inherit;text-decoration:none}
+.notif:last-child{border-bottom:0}
+.notif:hover{background:var(--panel-2);text-decoration:none}
+.notif.unread{background:color-mix(in srgb,var(--accent) 9%,transparent)}
+.notif .ic{width:26px;height:26px;border-radius:8px;background:var(--panel-3);display:grid;place-items:center;font-size:12px;color:var(--muted);flex:none}
+.notif .body{flex:1;min-width:0;display:grid;gap:1px}
+.notif .body b{font-weight:600}
+.notif .when{color:var(--muted);font-size:11.5px;white-space:nowrap}
+
 @media(max-width:860px){
   .grid2,.grid3{grid-template-columns:1fr}
   .nav{display:none}
