@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<script>try{var q=new URLSearchParams(location.search);var t=q.get("theme");if(t)localStorage.setItem("sc_theme",t);var a=q.get("accent");if(a)localStorage.setItem("sc_accent",a);}catch(e){}</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Inbox — Sable &amp; Circuit Admin</title>
+<script>
+(function(){try{
+  var t=localStorage.getItem("sc_theme")||"system";
+  var th=t==="system"?(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):t;
+  var r=document.documentElement;r.setAttribute("data-theme",th);
+  r.setAttribute("data-density",localStorage.getItem("sc_density")||"comfortable");
+  var a={teal:["#00aebb","#00838f"],indigo:["#7c8cff","#4f46e5"],emerald:["#34d399","#059669"],amber:["#f0a132","#b45309"],rose:["#fb7185","#be123c"]}[localStorage.getItem("sc_accent")||"teal"];
+  r.style.setProperty("--accent",th==="dark"?a[0]:a[1]);
+  r.style.setProperty("--accent-ink",th==="dark"?"#04120f":"#ffffff");
+}catch(e){}})();
+</script>
+<link rel="stylesheet" href="assets/app.css">
+<script src="assets/mock-supabase.js"></script>
+</head>
+<body data-page="inbox" data-shell="app">
+<main class="wrap">
+  <div class="spread">
+    <div>
+      <h1>Contact inbox</h1>
+      <div class="muted">Messages submitted through the public site's contact form.</div>
+    </div>
+    <div class="row">
+      <span class="badge new" id="unreadBadge">0 unread</span>
+      <button class="btn" id="reload">Refresh</button>
+    </div>
+  </div>
+
+  <div id="notice" class="notice hidden"></div>
+
+  <div class="toolbar">
+    <div class="search"><input id="q" type="search" placeholder="Search name, email, subject or message…"></div>
+    <select id="fStatus" style="max-width:190px">
+      <option value="">All statuses</option>
+      <option value="new">New / unread</option>
+      <option value="read">Read</option>
+      <option value="archived">Archived</option>
+    </select>
+    <span class="muted small" id="count"></span>
+  </div>
+
+  <div class="hintbox">
+    Notifications are real only: the corner bell and this page count rows that actually
+    exist in <span class="mono">contact_messages</span> with <span class="mono">status = new</span>.
+    Nothing is invented on the client.
+  </div>
+
+  <div id="list" style="margin-top:14px"><div class="empty">Loading…</div></div>
+</main>
+
+<div id="modalRoot"></div>
+
+<script src="assets/app.js"></script>
+<script>
+document.addEventListener("admin:ready", function(){
+  var A = window.Admin, sb = A.sb, $ = A.$;
+  var messages = [];
+
+  function unreadCount(){ return messages.filter(function(m){ return m.status === "new"; }).length; }
+
+  function render(){
+    var q = $("q").value.trim().toLowerCase(), fs = $("fStatus").value;
+    var rows = messages.filter(function(m){
+      if (fs && m.status !== fs) return false;
+      if (q){
+        var hay = ((m.name || "") + " " + (m.email || "") + " " + (m.subject || "") + " " + (m.message || "")).toLowerCase();
+        if (hay.indexOf(q) === -1) return false;
+      }
+      return true;
+    });
+    $("unreadBadge").textContent = unreadCount() + " unread";
+    $("count").textContent = rows.length + " of " + messages.length + " shown";
+    if (!rows.length){ $("list").innerHTML = '<div class="empty">' + (messages.length ? "No messages match your filters." : "No messages yet.") + '</div>'; return; }
+    $("list").innerHTML = rows.map(function(m){
+      return '<div class="item" data-id="' + A.esc(m.id) + '">' +
+        '<div class="spread"><div class="t">' + A.esc(m.subject || "No subject") + '</div><span class="badge ' + A.esc(m.status || "new") + '">' + A.esc(m.status || "new") + '</span></div>' +
+        '<div class="meta">' + A.esc(m.name || "Unknown") + ' · ' + A.esc(m.email || "no email") + ' · ' + A.fmtDate(m.created_at) + '</div>' +
+        '<div style="white-space:pre-wrap;margin:6px 0">' + A.esc((m.message || "").slice(0, 260)) + ((m.message || "").length > 260 ? "…" : "") + '</div>' +
+        '<div class="row">' +
+          '<button class="btn sm" data-act="view">View</button>' +
+          (m.status !== "read" ? '<button class="btn sm" data-act="read">Mark read</button>' : '<button class="btn sm" data-act="new">Mark unread</button>') +
+          (m.status !== "archived" ? '<button class="btn sm" data-act="archived">Archive</button>' : '<button class="btn sm" data-act="read">Unarchive</button>') +
+          (m.email ? '<a class="btn sm" href="mailto:' + A.esc(m.email) + '?subject=' + encodeURIComponent("Re: " + (m.subject || "Your message")) + '">Reply</a>' : "") +
+        '</div></div>';
+    }).join("");
+    $("list").querySelectorAll(".item").forEach(function(el){
+      var m = messages.filter(function(x){ return x.id === el.getAttribute("data-id"); })[0];
+      el.querySelectorAll("[data-act]").forEach(function(b){
+        b.onclick = function(){
+          var act = b.getAttribute("data-act");
+          if (act === "view") view(m);
+          else if (act === "read" || act === "new" || act === "archived") setStatus(m, act);
+        };
+      });
+    });
+  }
+
+  async function setStatus(m, status){
+    var r = await sb.from("contact_messages").update({ status: status }).eq("id", m.id);
+    if (r.error){ A.setNotice("notice", A.friendly(r.error), "error"); return; }
+    m.status = status;
+    render();
+    if (window.Admin.refreshUnread) window.Admin.refreshUnread();
+  }
+
+  function view(m){
+    var root = $("modalRoot");
+    root.innerHTML =
+      '<div class="modal" id="mv"><div class="sheet">' +
+        '<div class="sheet-head"><b>' + A.esc(m.subject || "No subject") + '</b><button class="iconbtn" id="mvclose" aria-label="Close">' + A.ICON.close + '</button></div>' +
+        '<div class="sheet-body">' +
+          '<div class="pill-row"><span class="badge ' + A.esc(m.status || "new") + '">' + A.esc(m.status || "new") + '</span><span class="badge">' + A.fmtDate(m.created_at) + '</span></div>' +
+          '<div class="kv" style="margin-top:14px"><div class="k">From</div><div>' + A.esc(m.name || "Unknown") + '</div>' +
+          '<div class="k">Email</div><div>' + A.esc(m.email || "—") + '</div></div>' +
+          '<div class="divider"></div>' +
+          '<div class="preview-body">' + A.esc(m.message || "") + '</div>' +
+          '<div class="row" style="margin-top:18px">' +
+            (m.email ? '<a class="btn primary" href="mailto:' + A.esc(m.email) + '?subject=' + encodeURIComponent("Re: " + (m.subject || "Your message")) + '">Reply by email</a>' : "") +
+            (m.status !== "read" ? '<button class="btn" id="mvread">Mark read</button>' : "") +
+            (m.status !== "archived" ? '<button class="btn" id="mvarch">Archive</button>' : "") +
+          '</div>' +
+        '</div>' +
+      '</div></div>';
+    function close(){ root.innerHTML = ""; }
+    $("mvclose").onclick = close;
+    $("mv").onclick = function(e){ if (e.target.id === "mv") close(); };
+    if ($("mvread")) $("mvread").onclick = function(){ setStatus(m, "read"); close(); };
+    if ($("mvarch")) $("mvarch").onclick = function(){ setStatus(m, "archived"); close(); };
+    document.addEventListener("keydown", function esc2(e){ if (e.key === "Escape"){ close(); document.removeEventListener("keydown", esc2); } });
+  }
+
+  async function load(){
+    A.setNotice("notice", "");
+    var r = await sb.from("contact_messages").select("*").order("created_at", { ascending: false });
+    if (r.error){ $("list").innerHTML = '<div class="empty">' + A.esc(A.friendly(r.error)) + '</div>'; return; }
+    messages = r.data || [];
+    render();
+    if (window.Admin.refreshUnread) window.Admin.refreshUnread();
+  }
+
+  $("q").oninput = render;
+  $("fStatus").onchange = render;
+  $("reload").onclick = load;
+  document.addEventListener("inbox:count", function(e){ $("unreadBadge").textContent = e.detail.unread + " unread"; });
+
+  load();
+});
+</script>
+</body>
+</html>
