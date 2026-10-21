@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<script>try{var q=new URLSearchParams(location.search);var t=q.get("theme");if(t)localStorage.setItem("sc_theme",t);var a=q.get("accent");if(a)localStorage.setItem("sc_accent",a);}catch(e){}</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign in — Sable &amp; Circuit Admin</title>
+<script>
+/* Set the theme before first paint to avoid a flash. */
+(function(){try{
+  var t=localStorage.getItem("sc_theme")||"system";
+  var th=t==="system"?(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):t;
+  var r=document.documentElement;r.setAttribute("data-theme",th);
+  r.setAttribute("data-density",localStorage.getItem("sc_density")||"comfortable");
+  var a={teal:["#00aebb","#00838f"],indigo:["#7c8cff","#4f46e5"],emerald:["#34d399","#059669"],amber:["#f0a132","#b45309"],rose:["#fb7185","#be123c"]}[localStorage.getItem("sc_accent")||"teal"];
+  r.style.setProperty("--accent",th==="dark"?a[0]:a[1]);
+  r.style.setProperty("--accent-ink",th==="dark"?"#04120f":"#ffffff");
+}catch(e){}})();
+</script>
+<link rel="stylesheet" href="assets/app.css">
+<script src="assets/mock-supabase.js"></script>
+</head>
+<body data-page="auth">
+<div class="auth-shell">
+  <div class="auth-card">
+    <div class="auth-top">
+      <div>
+        <div class="brand" style="font-size:20px">Sable <b>&amp;</b> Circuit</div>
+        <div class="muted small" style="letter-spacing:.14em">ADMIN STUDIO</div>
+      </div>
+      <button class="iconbtn" id="themebtn" title="Toggle light / dark" aria-label="Toggle theme"></button>
+    </div>
+
+    <div class="eyebrow">Secure access</div>
+    <h1 id="heading" style="margin-top:8px">Welcome back.</h1>
+    <p id="intro" class="muted" style="margin-top:2px">Sign in to manage the journal.</p>
+
+    <div id="notice" class="notice hidden" role="status"></div>
+
+    <form id="authform" autocomplete="on">
+      <div class="field">
+        <label for="email">Email address</label>
+        <input id="email" type="email" required autocomplete="email" placeholder="you@example.com">
+      </div>
+      <div class="field" id="pwbox">
+        <label for="pw">Password</label>
+        <input id="pw" type="password" minlength="8" autocomplete="current-password">
+      </div>
+      <div class="field hidden" id="confirmbox">
+        <label for="confirm">Confirm password</label>
+        <input id="confirm" type="password" minlength="8" autocomplete="new-password">
+      </div>
+      <button id="submit" class="btn primary block" type="submit">Sign in</button>
+      <button id="toggle" class="btn block" type="button">Create account</button>
+    </form>
+
+    <div class="row" style="margin-top:6px">
+      <button id="forgot" class="linklike" type="button">Forgot password?</button>
+      <button id="back" class="linklike hidden" type="button">Back to sign in</button>
+    </div>
+
+    <div class="hintbox" style="margin-top:18px">
+      Supabase handles email delivery. New accounts need an admin role in
+      <span class="mono">admin_users</span> before the studio unlocks.
+    </div>
+  </div>
+</div>
+
+<script src="assets/app.js"></script>
+<script>
+(function(){
+  var A = window.Admin, sb = A.sb, $ = A.$;
+  var mode = "login";
+
+  $("themebtn").innerHTML = A.ICON.theme;
+  $("themebtn").onclick = function(){
+    A.pref.set("theme", A.effectiveTheme() === "dark" ? "light" : "dark");
+    A.paint();
+  };
+
+  function setMode(m){
+    mode = m;
+    A.setNotice("notice", "");
+    var H = { login:"Welcome back.", signup:"Create your account.", forgot:"Reset your password.", reset:"Choose a new password." };
+    var P = { login:"Sign in to manage the journal.", signup:"Create an account; admin access requires approval.", forgot:"Request a password reset link.", reset:"Choose a new password for your account." };
+    $("heading").textContent = H[m];
+    $("intro").textContent = P[m];
+    $("pwbox").classList.toggle("hidden", m === "forgot");
+    $("confirmbox").classList.toggle("hidden", !(m === "signup" || m === "reset"));
+    $("pw").required = m !== "forgot";
+    $("confirm").required = (m === "signup" || m === "reset");
+    $("submit").textContent = { login:"Sign in", signup:"Create account", forgot:"Send reset link", reset:"Update password" }[m];
+    $("toggle").textContent = m === "login" ? "Create account" : "Sign in instead";
+    $("toggle").classList.toggle("hidden", m !== "login");
+    $("forgot").classList.toggle("hidden", m !== "login");
+    $("back").classList.toggle("hidden", m === "login");
+  }
+
+  // Password-recovery links land on this page with type=recovery in the URL.
+  var recovery = /type=recovery/i.test(location.hash + "&" + location.search);
+
+  async function route(u){
+    var res = await sb.from("admin_users").select("role").eq("user_id", u.id).maybeSingle();
+    if (res.error) throw res.error;
+    if (!res.data){
+      await sb.auth.signOut();
+      A.setNotice("notice", "Your account exists, but admin access has not been approved yet. Ask an owner to add you to admin_users.", "error");
+      setMode("login");
+      return;
+    }
+    location.replace("dashboard.html");
+  }
+
+  sb.auth.onAuthStateChange(function(event, session){
+    if (event === "PASSWORD_RECOVERY"){ setMode("reset"); return; }
+    if (event === "SIGNED_IN" && session && session.user && !recovery){
+      setTimeout(function(){ route(session.user).catch(function(e){ A.setNotice("notice", A.friendly(e), "error"); }); }, 0);
+    }
+  });
+
+  (async function(){
+    if (new URLSearchParams(location.search).get("denied")){
+      A.setNotice("notice", "That account is not an approved admin. Sign in with an admin account.", "error");
+    }
+    if (recovery){ setMode("reset"); return; }
+    setMode("login");
+    var s = await sb.auth.getSession();
+    if (recovery){ setMode("reset"); return; }
+    if (s.data && s.data.session && s.data.session.user){
+      try { await route(s.data.session.user); }
+      catch(e){ A.setNotice("notice", A.friendly(e), "error"); }
+    }
+  })();
+
+  $("authform").onsubmit = async function(e){
+    e.preventDefault();
+    var btn = $("submit"); btn.disabled = true; A.setNotice("notice", "");
+    try{
+      var email = $("email").value.trim(), password = $("pw").value, r;
+      if (mode === "login"){
+        r = await sb.auth.signInWithPassword({ email: email, password: password });
+        if (r.error) throw r.error;
+        await route(r.data.user);
+      } else if (mode === "signup"){
+        if (password !== $("confirm").value) throw new Error("Passwords do not match.");
+        r = await sb.auth.signUp({ email: email, password: password, options: { emailRedirectTo: location.origin } });
+        if (r.error) throw r.error;
+        A.setNotice("notice", "Signup request accepted by Supabase. This does not guarantee email delivery — check Auth logs and SMTP if no email arrives.", "ok");
+      } else if (mode === "forgot"){
+        r = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin });
+        if (r.error) throw r.error;
+        A.setNotice("notice", "If that email has an account, a reset link is on its way. Delivery is not guaranteed — check Supabase Auth logs and SMTP.", "ok");
+      } else {
+        if (password !== $("confirm").value) throw new Error("Passwords do not match.");
+        r = await sb.auth.updateUser({ password: password });
+        if (r.error) throw r.error;
+        recovery = false;
+        history.replaceState(null, "", location.pathname);
+        await sb.auth.signOut();
+        setMode("login");
+        A.setNotice("notice", "Password updated. Sign in with your new password.", "ok");
+      }
+    } catch(err){
+      A.setNotice("notice", A.friendly(err), "error");
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  $("toggle").onclick = function(){ setMode(mode === "login" ? "signup" : "login"); };
+  $("forgot").onclick = function(){ setMode("forgot"); };
+  $("back").onclick = function(){ setMode("login"); };
+})();
+</script>
+</body>
+</html>
