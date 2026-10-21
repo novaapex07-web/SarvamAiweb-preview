@@ -58,6 +58,11 @@
       { id: "m4", name: "Ravi Iyer", email: "ravi@example.com", subject: "Newsletter",
         message: "Do you have a newsletter I can subscribe to?",
         status: "archived", created_at: iso(86400000 * 5) }
+    ],
+    admin_notifications: [
+      { id: "n1", kind: "contact_message", title: "New contact message", body: "Priya Sharma (priya@example.com): Partnership enquiry", related_id: "m1", is_read: false, created_at: iso(3600000 * 3) },
+      { id: "n2", kind: "article_published", title: "Article published", body: "A field guide to threat modelling", related_id: "a2", is_read: false, created_at: iso(86400000 * 2) },
+      { id: "n3", kind: "system", title: "Welcome to the studio", body: "Sample notification for the preview.", related_id: null, is_read: true, created_at: iso(86400000 * 9) }
     ]
   };
 
