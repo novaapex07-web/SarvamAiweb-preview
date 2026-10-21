@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<script>try{var q=new URLSearchParams(location.search);var t=q.get("theme");if(t)localStorage.setItem("sc_theme",t);var a=q.get("accent");if(a)localStorage.setItem("sc_accent",a);}catch(e){}</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Account — Sable &amp; Circuit Admin</title>
+<script>
+(function(){try{
+  var t=localStorage.getItem("sc_theme")||"system";
+  var th=t==="system"?(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):t;
+  var r=document.documentElement;r.setAttribute("data-theme",th);
+  r.setAttribute("data-density",localStorage.getItem("sc_density")||"comfortable");
+  var a={teal:["#00aebb","#00838f"],indigo:["#7c8cff","#4f46e5"],emerald:["#34d399","#059669"],amber:["#f0a132","#b45309"],rose:["#fb7185","#be123c"]}[localStorage.getItem("sc_accent")||"teal"];
+  r.style.setProperty("--accent",th==="dark"?a[0]:a[1]);
+  r.style.setProperty("--accent-ink",th==="dark"?"#04120f":"#ffffff");
+}catch(e){}})();
+</script>
+<link rel="stylesheet" href="assets/app.css">
+<script src="assets/mock-supabase.js"></script>
+</head>
+<body data-page="account" data-shell="app">
+<main class="wrap">
+  <h1>Account &amp; security</h1>
+  <div class="muted">Your profile, password and session.</div>
+  <div id="notice" class="notice hidden"></div>
+
+  <div class="grid2" style="margin-top:18px">
+    <section class="panel">
+      <h2 style="margin-top:0">Profile</h2>
+      <div class="kv">
+        <div class="k">Email</div><div id="pEmail">—</div>
+        <div class="k">Role</div><div id="pRole">—</div>
+        <div class="k">User ID</div><div class="mono small" id="pId">—</div>
+        <div class="k">Account created</div><div id="pCreated">—</div>
+        <div class="k">Last sign-in</div><div id="pSignin">—</div>
+      </div>
+      <div class="divider"></div>
+      <p class="muted small">Admin access is verified against <span class="mono">admin_users</span> on every page load. If the row is removed, the studio signs you out.</p>
+      <button class="btn danger" id="signout">Sign out</button>
+    </section>
+
+    <section class="panel">
+      <h2 style="margin-top:0">Change password</h2>
+      <p class="muted small">Sets a new password for the signed-in account.</p>
+      <form id="pwform">
+        <div class="field"><label for="np">New password</label><input id="np" type="password" minlength="8" autocomplete="new-password" required></div>
+        <div class="field"><label for="cp">Confirm new password</label><input id="cp" type="password" minlength="8" autocomplete="new-password" required></div>
+        <button class="btn primary" type="submit">Update password</button>
+      </form>
+
+      <div class="divider"></div>
+
+      <h3 style="margin-bottom:4px">Forgot password</h3>
+      <p class="muted small">Send a reset link to your email. Supabase handles delivery; the link opens the reset screen.</p>
+      <button class="btn" id="sendreset">Email me a reset link</button>
+
+      <div class="divider"></div>
+
+      <h3 style="margin-bottom:4px">Session</h3>
+      <div class="kv">
+        <div class="k">Expires</div><div id="sExp">—</div>
+        <div class="k">Token type</div><div id="sType">—</div>
+      </div>
+      <button class="btn" id="refresh" style="margin-top:10px">Refresh session</button>
+    </section>
+  </div>
+</main>
+
+<script src="assets/app.js"></script>
+<script>
+document.addEventListener("admin:ready", function(ev){
+  var A = window.Admin, sb = A.sb, $ = A.$, who = ev.detail;
+  var u = who.user;
+
+  $("pEmail").textContent = u.email || "—";
+  $("pRole").textContent = who.role || "admin";
+  $("pId").textContent = u.id || "—";
+  $("pCreated").textContent = A.fmtDate(u.created_at);
+  $("pSignin").textContent = A.fmtDate(u.last_sign_in_at || u.updated_at);
+
+  (async function(){
+    var s = await sb.auth.getSession();
+    var sess = s.data && s.data.session;
+    if (sess){
+      $("sExp").textContent = A.fmtDate(new Date(sess.expires_at * 1000).toISOString());
+      $("sType").textContent = sess.token_type || "bearer";
+    }
+  })();
+
+  $("pwform").onsubmit = async function(e){
+    e.preventDefault();
+    var np = $("np").value, cp = $("cp").value;
+    if (np.length < 8){ A.setNotice("notice", "Use at least 8 characters.", "error"); return; }
+    if (np !== cp){ A.setNotice("notice", "The passwords do not match.", "error"); return; }
+    if (!confirm("Change your password now?")) return;
+    A.setNotice("notice", "Updating…");
+    var r = await sb.auth.updateUser({ password: np });
+    if (r.error){ A.setNotice("notice", A.friendly(r.error), "error"); return; }
+    $("pwform").reset();
+    A.setNotice("notice", "Password updated.", "ok");
+    A.toast("Password updated.", "ok");
+  };
+
+  $("sendreset").onclick = async function(){
+    if (!confirm("Email a password reset link to " + (u.email || "your address") + "?")) return;
+    A.setNotice("notice", "Sending…");
+    var r = await sb.auth.resetPasswordForEmail(u.email, { redirectTo: location.origin });
+    if (r.error){ A.setNotice("notice", A.friendly(r.error), "error"); return; }
+    A.setNotice("notice", "If delivery succeeds, a reset link is on its way. Check Supabase Auth logs and SMTP if nothing arrives.", "ok");
+  };
+
+  $("refresh").onclick = async function(){
+    var r = await sb.auth.refreshSession();
+    if (r.error){ A.setNotice("notice", A.friendly(r.error), "error"); return; }
+    var sess = r.data.session;
+    if (sess) $("sExp").textContent = A.fmtDate(new Date(sess.expires_at * 1000).toISOString());
+    A.setNotice("notice", "Session refreshed.", "ok");
+  };
+
+  $("signout").onclick = async function(){
+    if (!confirm("Sign out of the admin studio?")) return;
+    await sb.auth.signOut();
+    location.replace("index.html");
+  };
+});
+</script>
+</body>
+</html>
